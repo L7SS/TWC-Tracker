@@ -1,0 +1,40 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "twc-tracker"
+version = "0.1.0"
+description = "Free, local-first work-search log for unemployment claimants. Texas (TWC BN900E) first; other states by config."
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.10"
+dependencies = []
+
+[project.optional-dependencies]
+docx = ["python-docx>=1.1"]
+dev = ["pytest>=8", "ruff>=0.5", "python-docx>=1.1"]
+
+[project.scripts]
+twc-tracker = "twc_tracker.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+"twc_tracker.ui" = ["index.html"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.ruff]
+line-length = 120
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "S"]
+ignore = ["S101"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["E501", "S105", "S106", "S107", "S310"]

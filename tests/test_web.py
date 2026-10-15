@@ -1,0 +1,56 @@
+import json
+import threading
+import urllib.error
+import urllib.request
+from http.server import ThreadingHTTPServer
+
+import pytest
+
+from twc_tracker import web
+
+
+@pytest.fixture
+def server(tmp_path, monkeypatch):
+    monkeypatch.setenv("TWC_TRACKER_HOME", str(tmp_path))
+    web.Handler.token = "tok"
+    srv = ThreadingHTTPServer(("127.0.0.1", 0), web.Handler)
+    web.Handler.port = srv.server_address[1]
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    yield f"http://127.0.0.1:{web.Handler.port}", tmp_path
+    srv.shutdown()
+    srv.server_close()
+
+
+def call(base, path, body=None, token="tok", host=None):
+    headers = {"X-Token": token}
+    if body is not None:
+        headers["Content-Type"] = "application/json"
+    if host:
+        headers["Host"] = host
+    req = urllib.request.Request(base + path, json.dumps(body).encode() if body is not None else None, headers)
+    try:
+        with urllib.request.urlopen(req) as r:  # noqa: S310
+            return r.status, json.loads(r.read())
+    except urllib.error.HTTPError as e:
+        return e.code, json.loads(e.read())
+
+
+def test_requires_token_and_local_host(server):
+    base, _ = server
+    assert call(base, "/api/state", token="wrong")[0] == 403
+    assert call(base, "/api/state", host="evil.example")[0] == 403
+    assert call(base, "/api/state")[0] == 200
+
+
+def test_log_flow_add_save_and_export(server):
+    base, home = server
+    assert call(base, "/api/applications", {"company": "Acme", "role": "Analyst", "date": "2026-10-08"})[0] == 200
+    assert call(base, "/api/import", {})[1] == {"added": 1}
+    assert call(base, "/api/import", {})[1] == {"added": 0}  # no duplicates
+    state = call(base, "/api/state")[1]
+    assert state["entries"][0]["employer"] == "Acme" and state["entries"][0]["hours"] == ""
+    assert state["entries"][0]["problems"]  # hours/proof not typed: not ready to sign
+    r = call(base, "/api/export", {})[1]
+    assert "TX_work_search_log_DRAFT.csv" in r["files"] and (home / "exports" / "TX_work_search_log_DRAFT.csv").exists()
+    assert call(base, "/api/settings", {"state": "ZZ"})[0] == 400
+    assert call(base, "/api/nope", {})[0] == 400

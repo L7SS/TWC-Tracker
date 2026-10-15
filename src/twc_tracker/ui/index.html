@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>TWC Tracker</title>
+<style>
+:root{--bg:#f6f7f9;--fg:#16191d;--mut:#5b6470;--card:#fff;--line:#d9dde3;--acc:#1f5eff;--bad:#b42318;--ok:#067647}
+@media (prefers-color-scheme:dark){:root{--bg:#111418;--fg:#e8eaed;--mut:#9aa3ae;--card:#1a1e24;--line:#2d333b;--acc:#6b9bff;--bad:#ff8a80;--ok:#5fd39a}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.45 system-ui,sans-serif}
+header{padding:14px 20px;border-bottom:1px solid var(--line);display:flex;gap:16px;align-items:center;flex-wrap:wrap}
+h1{font-size:18px;margin:0}nav button{background:none;border:0;color:var(--mut);font:inherit;padding:6px 10px;cursor:pointer;border-radius:6px}
+nav button.on{background:var(--card);color:var(--fg);border:1px solid var(--line)}
+main{max-width:1200px;margin:0 auto;padding:16px 20px}section{display:none}section.on{display:block}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px;margin-bottom:14px}
+table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:6px;border-bottom:1px solid var(--line);vertical-align:top;font-size:13px}
+input,select,textarea,button.act{font:inherit;color:var(--fg);background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:5px 7px;max-width:100%}
+td input,td select{width:100%;min-width:70px}
+button.act{background:var(--acc);color:#fff;border:0;padding:7px 12px;cursor:pointer}button.act.sec{background:var(--card);color:var(--fg);border:1px solid var(--line)}
+.bad{color:var(--bad);font-size:12px}.ok{color:var(--ok)}.mut{color:var(--mut)}.row{display:flex;gap:10px;flex-wrap:wrap;align-items:end}
+label{display:block;font-size:12px;color:var(--mut)}.scroll{overflow-x:auto}.rd{white-space:nowrap;min-width:84px}.sm{font-size:11px;white-space:normal}
+.warn{border-left:4px solid var(--bad)}
+</style></head><body>
+<header><h1>TWC Tracker</h1><span class="mut">Local only. Nothing leaves this computer.</span><nav id="nav"></nav></header>
+<main>
+<div class="card warn sm">Not affiliated with any state agency. This is a record-keeping aid, not advice. <b>You</b> decide what is true, review every
+ entry, and sign it. The agency decides what counts: check your own determination letter.</div>
+<section id="tab-log" class="on">
+ <div class="card"><b>Weekly totals</b> <span class="mut">(claim weeks run Sunday to Saturday)</span><ul id="weekly"></ul>
+  <div class="mut">Hours are only what you type. Nothing is estimated for you.</div></div>
+ <div class="card"><div class="row">
+  <button class="act" id="import">Add my tracked applications</button>
+  <button class="act sec" id="addrow">Add an activity</button>
+  <button class="act" id="save">Save</button>
+  <button class="act sec" id="export">Make the log (CSV + Word)</button><span id="msg" class="mut" role="status"></span></div>
+  <div id="dl"></div></div>
+ <div class="card scroll"><table id="log"></table></div>
+</section>
+<section id="tab-apps">
+ <div class="card"><b>Add an application</b><div class="row" id="appform"></div></div>
+ <div class="card scroll"><table id="apps"></table></div>
+</section>
+<section id="tab-cal">
+ <div class="card"><b>From a calendar file (.ics)</b>
+  <p class="mut">Export your calendar to an .ics file and choose it here. Interviews and networking events are suggested; you choose what to add. Nothing is kept unless you add it.</p>
+  <div class="row"><input id="icsfile" type="file" accept=".ics,text/calendar"><span id="cmsg" class="mut"></span></div><div class="scroll"><table id="cres"></table></div></div>
+ <div class="card"><b>Put your log on your calendar</b>
+  <p class="mut">Makes an .ics file of your dated log entries, for your calendar app's Import.</p>
+  <button class="act sec" id="icsout">Make the calendar file</button> <span id="omsg" class="mut"></span> <span id="odl"></span></div>
+</section>
+<section id="tab-set">
+ <div class="card"><div class="row"><div><label>Your name (as on the log)</label><input id="sname"></div>
+  <div><label>State</label><select id="sstate"></select></div>
+  <div><label>Required activities per week (from your own agency notice)</label><input id="sreq" type="number" min="0" max="50"></div></div>
+  <p><button class="act" id="ssave">Save settings</button></p>
+  <p class="mut sm" id="srcnote"></p></div>
+ <div class="card"><b>Reminders from the agency's own definitions</b><ul id="rem"></ul></div>
+</section>
+</main>
+<script>
+const TOKEN="__TOKEN__";let S=null;const $=id=>document.getElementById(id);
+const el=(t,a={},...k)=>{const e=document.createElement(t);for(const[x,v]of Object.entries(a))e[x]=v;for(const c of k)e.append(c);return e};
+async function api(p,b){const r=await fetch(p,{method:b?'POST':'GET',headers:{'X-Token':TOKEN,...(b?{'Content-Type':'application/json'}:{})},body:b?JSON.stringify(b):undefined});
+ const j=await r.json();if(!r.ok)throw new Error(j.error||r.status);return j}
+const say=(id,t)=>{$(id).textContent=t};
+const tabs=[['log','Work-search log'],['apps','Applications'],['cal','Calendar'],['set','Settings']];
+tabs.forEach(([id,n])=>{const b=el('button',{textContent:n});b.onclick=()=>{tabs.forEach(([i])=>$('tab-'+i).classList.toggle('on',i==id));[...$('nav').children].forEach(x=>x.classList.toggle('on',x===b))};if(id=='log')b.classList.add('on');$('nav').append(b)});
+const short=p=>p.startsWith('hours')?'hours':p.startsWith('date')?'date':p.startsWith('pick')?'category':p.startsWith('employer')?'employer':p.startsWith('result')?'result':p;
+const COLS=['date','activity','category','job_type','employer','phone','person_contacted','contact_method','result','hours','proof'];
+function cell(e,i,c){const td=el('td');let inp;
+ if(c=='category'||c=='result'){inp=el('select');inp.append(el('option',{value:'',textContent:'(pick)'}));(c=='category'?S.activities:S.results).forEach(a=>inp.append(el('option',{value:a,textContent:a})))}
+ else inp=el('input',{type:c=='date'?'date':'text'});
+ inp.value=e[c]||'';inp.oninput=()=>{S.entries[i][c]=inp.value};td.append(inp);return td}
+function render(){
+ $('weekly').replaceChildren(...S.weekly.map(l=>el('li',{textContent:l})),...(S.weekly.length?[]:[el('li',{textContent:'No entries yet.'})]));
+ const t=$('log');t.replaceChildren(el('tr',{},...COLS.map(c=>el('th',{textContent:c.replace('_',' ')})),el('th',{textContent:'ready?'}),el('th')));
+ S.entries.forEach((e,i)=>{const tr=el('tr');COLS.forEach(c=>tr.append(cell(e,i,c)));
+  const rd=el('td',{className:(e.problems.length?'bad':'ok')+' rd',textContent:e.problems.length?'Needs '+e.problems.length:'Ready',title:e.problems.join('\n')});
+  if(e.problems.length)rd.append(el('div',{className:'mut sm',textContent:e.problems.map(short).join(', ')}));tr.append(rd);
+  const d=el('button',{className:'act sec',textContent:'Remove'});d.onclick=()=>{S.entries.splice(i,1);render()};tr.append(el('td',{},d));t.append(tr)});
+ const A=['date','company','role','channel','outcome','notes'];
+ $('apps').replaceChildren(el('tr',{},...A.map(c=>el('th',{textContent:c}))),...S.applications.map(r=>el('tr',{},...A.map(c=>el('td',{textContent:r[c]||''})))));
+ $('sname').value=S.settings.name;$('sreq').value=S.settings.required;
+ $('sstate').replaceChildren(...S.states.map(s=>el('option',{value:s,textContent:s,selected:s==S.settings.state})));
+ $('srcnote').textContent=S.agency+', '+S.form+'. Source: '+S.source;
+ $('rem').replaceChildren(...S.reminders.map(l=>el('li',{textContent:l})));
+}
+async function load(){S=await api('/api/state');render()}
+const blank=(a={})=>({date:'',activity:'',category:'',job_type:'',employer:'',phone:'',person_contacted:'',contact_method:'',result:'',hours:'',proof:'',problems:['unsaved'],notes:[],...a});
+$('save').onclick=async()=>{try{await api('/api/entries',{entries:S.entries});await load();say('msg','Saved.')}catch(e){say('msg',e.message)}};
+$('addrow').onclick=()=>{S.entries.push(blank());render()};
+$('import').onclick=async()=>{try{await api('/api/entries',{entries:S.entries});const r=await api('/api/import',{});await load();say('msg','Added '+r.added+' applications. Hours and proof are blank: fill them in.')}catch(e){say('msg',e.message)}};
+const links=(files)=>files.map(f=>el('a',{href:'/download?t='+TOKEN+'&f='+encodeURIComponent(f),textContent:f+'  '}));
+$('export').onclick=async()=>{try{await api('/api/entries',{entries:S.entries});const r=await api('/api/export',{});await load();
+ $('dl').replaceChildren(...links(r.files));say('msg',(r.note?r.note+' ':'')+'Draft written. You still review and sign it yourself.')}catch(e){say('msg',e.message)}};
+const AF=[['date','Date applied','date'],['company','Company'],['role','Role'],['channel','Channel'],['notes','Notes']];
+AF.forEach(([k,l,t])=>$('appform').append(el('div',{},el('label',{textContent:l}),el('input',{id:'af_'+k,type:t||'text'}))));
+const ob=el('select',{id:'af_outcome'});['applied','prepared','no_response','rejected','recruiter_screen','interview','offer'].forEach(o=>ob.append(el('option',{value:o,textContent:o})));
+$('appform').append(el('div',{},el('label',{textContent:'Outcome'}),ob));
+const ab=el('button',{className:'act',textContent:'Add'});ab.onclick=async()=>{try{await api('/api/applications',Object.fromEntries([...AF.map(([k])=>[k,$('af_'+k).value]),['outcome',$('af_outcome').value]]));await load()}catch(e){alert(e.message)}};$('appform').append(ab);
+$('ssave').onclick=async()=>{try{await api('/api/settings',{name:$('sname').value,required:+$('sreq').value,state:$('sstate').value});await load()}catch(e){alert(e.message)}};
+const CAT={interview:'In-person visit, job application or interview with an employer who may reasonably have openings',networking:'Work-related networking event, job club, job fair or employment workshop'};
+$('icsfile').onchange=async()=>{const f=$('icsfile').files[0];if(!f)return;try{const r=await api('/api/ics/preview',{text:await f.text()});say('cmsg',r.events.length+' events. Suggested ones are marked; others start as Skip.');
+ const t=$('cres');t.replaceChildren(el('tr',{},...['Use?','When','Title','Hours'].map(h=>el('th',{textContent:h}))));
+ r.events.forEach(ev=>{const sel=el('select');['Skip','interview','networking'].forEach(o=>sel.append(el('option',{value:o,textContent:o})));sel.value=ev.suggested||'Skip';
+  const hrs=el('input',{value:ev.hours,size:4});t.append(el('tr',{},el('td',{},sel),el('td',{textContent:ev.start.replace('T',' ')}),el('td',{textContent:ev.title}),el('td',{},hrs)));
+  ev._sel=sel;ev._hrs=hrs});
+ const go=el('button',{className:'act',textContent:'Add chosen to my log'});go.onclick=async()=>{const add=r.events.filter(e=>e._sel.value!='Skip').map(e=>blank({date:e.start.slice(0,10),
+  activity:e._sel.value=='interview'?'Interviewed':'Attended networking event',category:CAT[e._sel.value],employer:'',hours:e._hrs.value,contact_method:'in person'}));
+  if(!add.length){say('cmsg','Nothing chosen.');return}await api('/api/entries',{entries:[...S.entries,...add]});await load();say('cmsg','Added '+add.length+'. Fill in the employer and result.')};
+ $('cres').after(go)}catch(e){say('cmsg',e.message)}};
+$('icsout').onclick=async()=>{try{await api('/api/entries',{entries:S.entries});const r=await api('/api/ics/export',{});$('odl').replaceChildren(...links(r.files));say('omsg',r.count+' dated entries.')}catch(e){say('omsg',e.message)}};
+load().catch(e=>say('msg',e.message));
+</script></body></html>

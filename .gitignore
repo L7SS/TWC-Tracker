@@ -1,0 +1,22 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+.pytest_cache/
+.ruff_cache/
+build/
+dist/
+.idea/
+.vscode/
+.DS_Store
+.env
+
+# Personal data: your real log, applications and exports. NEVER commit.
+.twc-tracker/
+worksearch_log.csv
+applications.csv
+exports/
+*.docx
+*.ics
+!examples/*.csv
+!examples/*.ics

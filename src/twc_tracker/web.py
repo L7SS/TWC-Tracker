@@ -135,6 +135,9 @@ class Handler(BaseHTTPRequestHandler):
         except (ValueError, TypeError, RuntimeError) as e:
             self._json({"error": str(e)[:300]}, 400)
 
+    def _calendar(self, action: str, body: dict, log: Path) -> dict:
+        return _calendar_route(action, body, log)
+
     def _route(self, path: str, body: dict) -> dict:
         log = data_dir() / "worksearch_log.csv"
         if path == "/api/settings":
@@ -173,6 +176,8 @@ class Handler(BaseHTTPRequestHandler):
             out.mkdir(exist_ok=True)
             write_private(out / "work_search_calendar.ics", to_ics(items))
             return {"files": ["work_search_calendar.ics"], "count": len(items)}
+        elif path.startswith("/api/calendar/"):
+            return self._calendar(path.rsplit("/", 1)[1], body, log)
         elif path == "/api/export":
             s = _settings()
             cfg = _cfg(s)
@@ -191,6 +196,32 @@ class Handler(BaseHTTPRequestHandler):
         else:
             raise KeyError(path)
         return {"ok": True}
+
+
+def _calendar_route(action: str, body: dict, log: Path, provider=None) -> dict:
+    """Google Calendar actions. Signing in happens in the terminal (`twc-tracker calendar login`), never here."""
+    from datetime import date, timedelta
+
+    from twc_tracker.calendars.google import CalendarError, GoogleCalendar
+    from twc_tracker.log import ensure_ids
+
+    g = provider or GoogleCalendar()
+    if action == "status":
+        return {"connected": g.connected()}
+    try:
+        if action == "push":
+            entries = load_entries(log)
+            if ensure_ids(entries):
+                save_entries(log, entries)
+            r = g.push(entries)
+            return {"created": r.created, "updated": r.updated, "skipped": r.skipped, "errors": r.errors}
+        if action == "pull":
+            days = max(1, min(120, int(body.get("days", 14))))
+            today = date.today()
+            return {"events": [a.as_dict() for a in g.list_events(today - timedelta(days=days), today)]}
+    except CalendarError as e:
+        raise ValueError(str(e)) from e
+    raise KeyError(action)
 
 
 def serve(port: int = 8765, open_browser: bool = True) -> None:

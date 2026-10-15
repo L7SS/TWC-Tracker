@@ -54,6 +54,16 @@ def build_parser() -> argparse.ArgumentParser:
 
     sub.add_parser("import", help="turn tracker rows into log entries (dates and hours stay blank if unknown)")
 
+    cal = sub.add_parser("calendar", help="sign in to Google Calendar, push your log, or pull events to review")
+    cs = cal.add_subparsers(dest="cal_cmd", required=True)
+    cs.add_parser("login", help="sign in with Google (opens your browser; needs your own OAuth client)")
+    cs.add_parser("status", help="are you signed in?")
+    cs.add_parser("logout", help="revoke access and delete the saved sign-in")
+    cs.add_parser("push", help="create or update one private all-day event per dated log entry")
+    pull = cs.add_parser("pull", help="list recent calendar events that could be work-search activity")
+    pull.add_argument("--days", type=int, default=14, help="how many days back to look")
+    pull.add_argument("--add", default="", help="comma-separated numbers from the list to add to your log")
+
     ex = sub.add_parser("export", help="write the log as CSV (and Word if python-docx is installed)")
     ex.add_argument("--name", default="")
     ex.add_argument("--required", type=int)
@@ -105,6 +115,8 @@ def main(argv: list[str] | None = None) -> int:
         ]  # fmt: skip
         save_entries(log, [*load_entries(log), *new])
         print(f"Added {len(new)} entries. Fill in hours, proof and any other blanks before you sign.")
+    elif args.cmd == "calendar":
+        return _calendar(args, log)
     elif args.cmd == "export":
         out = data_dir() / "exports"
         out.mkdir(exist_ok=True)
@@ -118,6 +130,52 @@ def main(argv: list[str] | None = None) -> int:
         except RuntimeError as err:
             print(f"Skipped Word file: {err}", file=sys.stderr)
         print("This is a draft. You review it and sign it yourself.")
+    return 0
+
+
+def _calendar(args, log) -> int:
+    from datetime import timedelta
+
+    from twc_tracker.calendars import suggestion_to_entry
+    from twc_tracker.calendars.google import CalendarError, GoogleCalendar, login, logout
+    from twc_tracker.log import ensure_ids
+
+    g = GoogleCalendar()
+    try:
+        if args.cal_cmd == "login":
+            login(g.token_path)
+            print("Signed in. Nothing has been sent yet: run `twc-tracker calendar push` when you are ready.")
+        elif args.cal_cmd == "status":
+            print("Signed in to Google Calendar." if g.connected() else "Not signed in.")
+        elif args.cal_cmd == "logout":
+            print("Signed out and revoked." if logout(g.token_path) else "Not signed in.")
+        elif args.cal_cmd == "push":
+            entries = load_entries(log)
+            if ensure_ids(entries):
+                save_entries(log, entries)
+            r = g.push(entries)
+            print(f"Created {r.created}, updated {r.updated}, skipped {r.skipped} without a valid date.")
+            for err in r.errors:
+                print("  failed:", err, file=sys.stderr)
+            return 1 if r.errors else 0
+        elif args.cal_cmd == "pull":
+            today = date.today()
+            events = g.list_events(today - timedelta(days=args.days), today)
+            for i, a in enumerate(events, 1):
+                print(f"{i:>3}. {a.start.replace('T', ' ')}  {a.title}  [{a.suggested or 'no suggestion'}]")
+            picked = [int(n) for n in args.add.split(",") if n.strip()]
+            if bad := [n for n in picked if not 1 <= n <= len(events)]:
+                print(f"No such event number(s): {bad}", file=sys.stderr)
+                return 2
+            new = [suggestion_to_entry(events[n - 1], events[n - 1].suggested or "networking") for n in picked]
+            if new:
+                save_entries(log, [*load_entries(log), *new])
+                print(f"Added {len(new)}. Fill in the employer and result, then run `check`.")
+            elif not args.add:
+                print("Nothing added. Re-run with --add 1,3 to add events you choose.")
+    except CalendarError as e:
+        print(f"Calendar: {e}", file=sys.stderr)
+        return 1
     return 0
 
 

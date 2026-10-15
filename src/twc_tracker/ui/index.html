@@ -41,6 +41,11 @@ label{display:block;font-size:12px;color:var(--mut)}.scroll{overflow-x:auto}.rd{
  <div class="card"><b>From a calendar file (.ics)</b>
   <p class="mut">Export your calendar to an .ics file and choose it here. Interviews and networking events are suggested; you choose what to add. Nothing is kept unless you add it.</p>
   <div class="row"><input id="icsfile" type="file" accept=".ics,text/calendar"><span id="cmsg" class="mut"></span></div><div class="scroll"><table id="cres"></table></div></div>
+ <div class="card"><b>Google Calendar</b> <span id="gstat" class="mut"></span>
+  <p class="mut">Sign in once from the terminal: <code>twc-tracker calendar login</code> (needs your own free Google OAuth client; see docs/CALENDAR.md). Then: <b>Send</b> creates or updates one private, all-day event per dated entry (title, hours and result only: never proof or contacts). <b>Read</b> lists recent events so you can choose which are work-search activity.</p>
+  <div class="row"><button class="act sec" id="gpush">Send my log to Google Calendar</button>
+  <div><label>Days back</label><input id="gdays" type="number" min="1" max="120" value="14" style="width:80px"></div>
+  <button class="act sec" id="gpull">Read recent events</button><span id="gmsg" class="mut" role="status"></span></div></div>
  <div class="card"><b>Put your log on your calendar</b>
   <p class="mut">Makes an .ics file of your dated log entries, for your calendar app's Import.</p>
   <button class="act sec" id="icsout">Make the calendar file</button> <span id="omsg" class="mut"></span> <span id="odl"></span></div>
@@ -97,15 +102,21 @@ $('appform').append(el('div',{},el('label',{textContent:'Outcome'}),ob));
 const ab=el('button',{className:'act',textContent:'Add'});ab.onclick=async()=>{try{await api('/api/applications',Object.fromEntries([...AF.map(([k])=>[k,$('af_'+k).value]),['outcome',$('af_outcome').value]]));await load()}catch(e){alert(e.message)}};$('appform').append(ab);
 $('ssave').onclick=async()=>{try{await api('/api/settings',{name:$('sname').value,required:+$('sreq').value,state:$('sstate').value});await load()}catch(e){alert(e.message)}};
 const CAT={interview:'In-person visit, job application or interview with an employer who may reasonably have openings',networking:'Work-related networking event, job club, job fair or employment workshop'};
-$('icsfile').onchange=async()=>{const f=$('icsfile').files[0];if(!f)return;try{const r=await api('/api/ics/preview',{text:await f.text()});say('cmsg',r.events.length+' events. Suggested ones are marked; others start as Skip.');
+function showEvents(events,msg){say(msg,events.length+' events. Suggested ones are marked; others start as Skip.');
  const t=$('cres');t.replaceChildren(el('tr',{},...['Use?','When','Title','Hours'].map(h=>el('th',{textContent:h}))));
- r.events.forEach(ev=>{const sel=el('select');['Skip','interview','networking'].forEach(o=>sel.append(el('option',{value:o,textContent:o})));sel.value=ev.suggested||'Skip';
+ $('cgo')?.remove();
+ events.forEach(ev=>{const sel=el('select');['Skip','interview','networking'].forEach(o=>sel.append(el('option',{value:o,textContent:o})));sel.value=ev.suggested||'Skip';
   const hrs=el('input',{value:ev.hours,size:4});t.append(el('tr',{},el('td',{},sel),el('td',{textContent:ev.start.replace('T',' ')}),el('td',{textContent:ev.title}),el('td',{},hrs)));
   ev._sel=sel;ev._hrs=hrs});
- const go=el('button',{className:'act',textContent:'Add chosen to my log'});go.onclick=async()=>{const add=r.events.filter(e=>e._sel.value!='Skip').map(e=>blank({date:e.start.slice(0,10),
+ const go=el('button',{className:'act',id:'cgo',textContent:'Add chosen to my log'});go.onclick=async()=>{const add=events.filter(e=>e._sel.value!='Skip').map(e=>blank({date:e.start.slice(0,10),
   activity:e._sel.value=='interview'?'Interviewed':'Attended networking event',category:CAT[e._sel.value],employer:'',hours:e._hrs.value,contact_method:'in person'}));
-  if(!add.length){say('cmsg','Nothing chosen.');return}await api('/api/entries',{entries:[...S.entries,...add]});await load();say('cmsg','Added '+add.length+'. Fill in the employer and result.')};
- $('cres').after(go)}catch(e){say('cmsg',e.message)}};
+  if(!add.length){say(msg,'Nothing chosen.');return}await api('/api/entries',{entries:[...S.entries,...add]});await load();say(msg,'Added '+add.length+'. Fill in the employer and result.')};
+ $('cres').after(go)}
+$('icsfile').onchange=async()=>{const f=$('icsfile').files[0];if(!f)return;try{const r=await api('/api/ics/preview',{text:await f.text()});showEvents(r.events,'cmsg')}catch(e){say('cmsg',e.message)}};
+api('/api/calendar/status',{}).then(r=>say('gstat',r.connected?'(signed in)':'(not signed in)')).catch(()=>{});
+$('gpush').onclick=async()=>{try{await api('/api/entries',{entries:S.entries});const r=await api('/api/calendar/push',{});await load();
+ say('gmsg','Created '+r.created+', updated '+r.updated+', skipped '+r.skipped+(r.errors.length?'. Failed: '+r.errors.join('; '):'.'))}catch(e){say('gmsg',e.message)}};
+$('gpull').onclick=async()=>{try{const r=await api('/api/calendar/pull',{days:+$('gdays').value||14});showEvents(r.events,'gmsg')}catch(e){say('gmsg',e.message)}};
 $('icsout').onclick=async()=>{try{await api('/api/entries',{entries:S.entries});const r=await api('/api/ics/export',{});$('odl').replaceChildren(...links(r.files));say('omsg',r.count+' dated entries.')}catch(e){say('omsg',e.message)}};
 load().catch(e=>say('msg',e.message));
 </script></body></html>

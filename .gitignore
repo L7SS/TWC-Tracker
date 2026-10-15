@@ -20,3 +20,6 @@ exports/
 *.ics
 !examples/*.csv
 !examples/*.ics
+google_token.json
+google_client.json
+client_secret*.json

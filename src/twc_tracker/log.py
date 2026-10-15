@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import csv
+import uuid
 from dataclasses import asdict, dataclass, field, fields
 from datetime import date, timedelta
 from pathlib import Path
@@ -31,6 +32,7 @@ class Entry:
     hours: str = ""  # the user's own time in hours, e.g. "1.5". Never filled in by the tool.
     proof: str = ""
     notes: list[str] = field(default_factory=list)
+    id: str = ""  # stable identity, assigned on first save; lets a calendar sync update instead of duplicate
 
     def problems(self, cfg: StateConfig, today: date | None = None) -> list[str]:
         """What stops this entry being ready to sign. Empty means complete."""
@@ -114,9 +116,20 @@ def load_entries(path: Path) -> list[Entry]:
         return [Entry.from_dict(row) for row in csv.DictReader(fh)]
 
 
+def ensure_ids(entries: list[Entry]) -> bool:
+    """Give every entry a stable id. Returns True if any were added."""
+    changed = False
+    for e in entries:
+        if not e.id:
+            e.id = uuid.uuid4().hex
+            changed = True
+    return changed
+
+
 def save_entries(path: Path, entries: list[Entry]) -> None:
+    ensure_ids(entries)
     with path.open("w", newline="", encoding="utf-8") as fh:
-        w = csv.DictWriter(fh, fieldnames=[*ENTRY_COLS, "notes"])
+        w = csv.DictWriter(fh, fieldnames=[*ENTRY_COLS, "id", "notes"])
         w.writeheader()
         for e in entries:
             d = e.as_dict()

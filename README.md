@@ -12,6 +12,7 @@ A free, local-first **work-search log** for people collecting unemployment benef
 - Marks every entry **Ready / Needs N** and says exactly what is missing, so you can fix it before you sign.
 - Keeps a simple **application tracker** and turns it into log entries for you to review.
 - Reads an **.ics calendar file** to suggest interviews and networking events, and writes your log back out as an .ics.
+- Optionally syncs with **Google Calendar**: push your log as private all-day events, or pull events to review ([docs/CALENDAR.md](docs/CALENDAR.md)).
 - Exports the log as **CSV** and **Word (.docx)** in the agency's column layout, with the agency's own reminders attached.
 
 ## What it will not do
@@ -19,7 +20,7 @@ A free, local-first **work-search log** for people collecting unemployment benef
 - Invent an application, date, hour or contact. Anything unknown prints as `FILL IN` and the entry is "not ready to sign".
 - Store or print a Social Security number.
 - Promise that any activity counts, or tell you how many searches you need.
-- Send anything anywhere. There is no account, no cloud, no telemetry. The web app listens on `127.0.0.1` only, with a per-run token.
+- Send anything anywhere unless you opt in to the calendar connector. There is no account, no cloud, no telemetry. The web app listens on `127.0.0.1` only, with a per-run token.
 
 ## Install
 
@@ -50,6 +51,9 @@ twc-tracker applied "Acme Corp" "Analyst"     # quick add to the application tra
 twc-tracker import                            # tracker rows -> log entries (hours stay blank for you)
 twc-tracker check                             # what still blocks each entry from being ready to sign
 twc-tracker week --required 5                 # totals per claim week
+twc-tracker calendar login                    # optional: Google Calendar (see docs/CALENDAR.md)
+twc-tracker calendar push                     # one private all-day event per dated entry
+twc-tracker calendar pull --days 14 --add 1   # review recent events, add the ones you choose
 twc-tracker export --name "Your Name"         # draft CSV + Word, for you to review and sign
 ```
 
@@ -70,4 +74,4 @@ pip install -e ".[dev]"
 pytest && ruff check . && ruff format --check .
 ```
 
-See [CONTRIBUTING.md](CONTRIBUTING.md). MIT licensed.
+Architecture: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). See [CONTRIBUTING.md](CONTRIBUTING.md). MIT licensed.

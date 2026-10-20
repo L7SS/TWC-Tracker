@@ -10,6 +10,7 @@ A free, local-first **work-search log** for people collecting unemployment benef
 - Records each work-search activity: date, activity, which accepted category it counts as, employer, contact, result, **hours you actually spent**, and where you keep proof.
 - Shows **totals per claim week** (Sunday to Saturday) and whether you met the number of searches your notice requires.
 - Marks every entry **Ready / Needs N** and says exactly what is missing, so you can fix it before you sign.
+- Mirrors TWC's online **Add Work Search Activity** page field by field, per claim week, with copy buttons, so you can enter each activity yourself ([docs/TWC_FORM.md](docs/TWC_FORM.md)). It never logs in to or submits to TWC.
 - Keeps a simple **application tracker** and turns it into log entries for you to review.
 - Reads an **.ics calendar file** to suggest interviews and networking events, and writes your log back out as an .ics.
 - Optionally syncs with **Google Calendar**: push your log as private all-day events, or pull events to review ([docs/CALENDAR.md](docs/CALENDAR.md)).
@@ -49,6 +50,7 @@ twc-tracker add --activity "Applied for job" \
   --employer "Acme Corp" --job-type "Analyst" --result "Application filed" --hours 1.5 --proof "confirmation email"
 twc-tracker applied "Acme Corp" "Analyst"     # quick add to the application tracker
 twc-tracker import                            # tracker rows -> log entries (hours stay blank for you)
+twc-tracker form --week 2026-10-06 --required 5   # one claim week laid out like TWC's page
 twc-tracker check                             # what still blocks each entry from being ready to sign
 twc-tracker week --required 5                 # totals per claim week
 twc-tracker calendar login                    # optional: Google Calendar (see docs/CALENDAR.md)

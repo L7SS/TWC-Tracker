@@ -41,6 +41,10 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_parser("activities", help="list the activities the state's agency accepts")
     sub.add_parser("check", help="list entries that are not ready to sign, and why")
 
+    fm = sub.add_parser("form", help="show one claim week laid out like the agency's online page, to copy across")
+    fm.add_argument("--week", default="", help="any date in the claim week, YYYY-MM-DD (default: this week)")
+    fm.add_argument("--required", type=int, help="minimum activities for the week, from the agency's page")
+
     wk = sub.add_parser("week", help="totals per claim week (Sunday to Saturday)")
     wk.add_argument("--required", type=int, help="activities required per week, from your own agency notice")
 
@@ -96,6 +100,8 @@ def main(argv: list[str] | None = None) -> int:
             print(f"#{i} {e.date or '(no date)'} {e.employer or e.activity}: " + "; ".join(e.problems(cfg)))
         print(f"{len(bad)} entries need attention." if bad else "Every entry is ready to sign.")
         return 1 if bad else 0
+    elif args.cmd == "form":
+        return _form(args, cfg, log)
     elif args.cmd == "week":
         lines = weekly_summary(load_entries(log), args.required)
         print("\n".join(lines) if lines else "No entries yet.")
@@ -130,6 +136,42 @@ def main(argv: list[str] | None = None) -> int:
         except RuntimeError as err:
             print(f"Skipped Word file: {err}", file=sys.stderr)
         print("This is a draft. You review it and sign it yourself.")
+    return 0
+
+
+def _form(args, cfg, log) -> int:
+    from twc_tracker.twcform import fields, form_problems, week_view
+
+    try:
+        day = date.fromisoformat(args.week) if args.week else date.today()
+    except ValueError:
+        print("--week must be a date like 2026-10-06", file=sys.stderr)
+        return 2
+    entries = load_entries(log)
+    v = week_view(entries, day, args.required, cfg)
+    print(f"Claim week: {v['start']} to {v['end']}")
+    if v["minimum"] is not None:
+        print(f"Minimum work searches: {v['minimum']}")
+    if v["due"]:
+        print(f"Due (estimated from {cfg.agency}'s page; check the real date there): {v['due']}")
+    mine = [e for e in entries if v["start"] <= e.date <= v["end"]]
+    for n, e in enumerate(mine, 1):
+        errs, warns = form_problems(e)
+        print(f"\n--- Activity {n}: {'READY' if not errs else 'NOT READY'} ---")
+        for f in fields(e):
+            if f.value or f.required:
+                print(f"{'*' if f.required else ' '} {f.label}: {f.value or '(blank)'}")
+        for m in [*errs, *warns]:
+            print(f"  ! {m}")
+    ready = sum(1 for e in mine if not form_problems(e)[0])
+    print(
+        f"\n{ready} of {len(mine)} activities ready for the form"
+        + (f" (minimum {v['minimum']})" if v["minimum"] else ".")
+    )
+    print(
+        "Enter these on the agency's page yourself, review them, and submit. Your log is not complete until the "
+        "agency shows a confirmation page."
+    )
     return 0
 
 

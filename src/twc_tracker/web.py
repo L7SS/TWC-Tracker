@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import secrets
 import webbrowser
+from datetime import date
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
@@ -16,9 +17,10 @@ from urllib.parse import parse_qs, urlparse
 from twc_tracker import applications
 from twc_tracker.export import write_csv, write_docx
 from twc_tracker.ics import parse_ics, to_ics
-from twc_tracker.log import Entry, claim_week, load_entries, save_entries, weekly_summary
+from twc_tracker.log import Entry, claim_week, load_entries, save_entries, week_bounds, weekly_summary
 from twc_tracker.paths import data_dir, safe_filename, write_private
 from twc_tracker.states import STATES
+from twc_tracker.twcform import CONTACT_METHODS, form_problems, methods, week_view
 
 MAX_BODY = 1_000_000
 _PAGE = Path(__file__).with_name("ui") / "index.html"
@@ -45,7 +47,20 @@ def _state() -> dict:
         "states": sorted(STATES),
         "applications": applications.read(data_dir() / "applications.csv"),
         "outcomes": list(applications.OUTCOMES),
-        "entries": [{**e.as_dict(), "problems": e.problems(cfg), "week": claim_week(e.date)} for e in entries],
+        "entries": [
+            {
+                **e.as_dict(),
+                "problems": e.problems(cfg),
+                "week": claim_week(e.date),
+                "contact_checked": methods(e.contact_method),
+                "form_errors": form_problems(e)[0],
+                "form_warnings": form_problems(e)[1],
+            }
+            for e in entries
+        ],
+        "form_weeks": [week_view(entries, d, s["required"], cfg) for d in _form_weeks(entries)],
+        "contact_methods": list(CONTACT_METHODS),
+        "online_form_examples": list(cfg.online_form_examples),
         "weekly": weekly_summary(entries, s["required"]),
         "activities": list(cfg.accepted_activities),
         "results": list(cfg.result_choices),
@@ -54,6 +69,17 @@ def _state() -> dict:
         "form": cfg.form,
         "source": cfg.source,
     }
+
+
+def _form_weeks(entries: list[Entry]) -> list[date]:
+    """The claim weeks to show: every week with an entry, plus this one, newest first."""
+    starts = {week_bounds(date.today())[0]}
+    for e in entries:
+        try:
+            starts.add(week_bounds(date.fromisoformat(e.date))[0])
+        except ValueError:
+            continue
+    return sorted(starts, reverse=True)
 
 
 def _entries_from(items: list[dict]) -> list[Entry]:

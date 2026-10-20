@@ -55,7 +55,7 @@ def suggestion_to_entry(a: Appointment, kind: str) -> Entry:
         date=a.start[:10],
         activity="Interviewed" if interview else "Attended networking event",
         category=TX_IN_PERSON if interview else TX_NETWORK,
-        contact_method="in person",
+        contact_method="In Person",
         hours=a.hours,
         notes=["from calendar event: " + a.title] + (["hours = event length"] if a.hours else []),
     )

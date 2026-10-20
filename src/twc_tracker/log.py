@@ -12,7 +12,8 @@ from twc_tracker.states import StateConfig
 
 ENTRY_COLS = [
     "date", "activity", "category", "job_type", "employer", "address", "phone", "person_contacted", "email",
-    "contact_method", "result", "hours", "proof",
+    "contact_method", "result", "hours", "proof", "address2", "city", "state", "zip", "ext", "fax", "website",
+    "filed_application", "hired", "start_date",
 ]  # fmt: skip
 
 
@@ -31,6 +32,16 @@ class Entry:
     result: str = ""
     hours: str = ""  # the user's own time in hours, e.g. "1.5". Never filled in by the tool.
     proof: str = ""
+    address2: str = ""
+    city: str = ""
+    state: str = ""  # two-letter, as the agency's form asks
+    zip: str = ""
+    ext: str = ""  # phone extension
+    fax: str = ""
+    website: str = ""
+    filed_application: str = ""  # "yes" / "no": did you file an application or resume with this contact?
+    hired: str = ""  # "yes" / "no": were you hired as a result?
+    start_date: str = ""  # YYYY-MM-DD, only if hired
     notes: list[str] = field(default_factory=list)
     id: str = ""  # stable identity, assigned on first save; lets a calendar sync update instead of duplicate
 
@@ -77,14 +88,20 @@ def parse_hours(text: str) -> float | None:
     return v if v > 0 and v == v and v != float("inf") else None  # noqa: PLR0124 (NaN check)
 
 
+def week_bounds(d: date) -> tuple[date, date]:
+    """The Sunday-to-Saturday claim week that contains a day."""
+    start = d - timedelta(days=(d.weekday() + 1) % 7)
+    return start, start + timedelta(days=6)
+
+
 def claim_week(day: str) -> str:
     """Claim weeks run Sunday to Saturday. Returns 'YYYY-MM-DD to YYYY-MM-DD', or '' for an unknown date."""
     try:
         d = date.fromisoformat(day)
     except ValueError:
         return ""
-    start = d - timedelta(days=(d.weekday() + 1) % 7)
-    return f"{start} to {start + timedelta(days=6)}"
+    start, end = week_bounds(d)
+    return f"{start} to {end}"
 
 
 def weekly_summary(entries: list[Entry], required: int | None = None) -> list[str]:

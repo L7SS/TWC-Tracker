@@ -27,6 +27,8 @@ class StateConfig:
     accepted_activities: tuple[str, ...] = ()  # the agency's own list; "includes but is not limited to"
     source: str = ""
     reminders: tuple[str, ...] = field(default_factory=tuple)  # paraphrased from the agency's own definitions
+    online_form_examples: tuple[str, ...] = ()  # what the agency's online log page lists as acceptable
+    due_days: int | None = None  # days after a claim week ends that the log is due, if the agency's page shows one
 
 
 TEXAS = StateConfig(
@@ -51,10 +53,23 @@ TEXAS = StateConfig(
         "No reply",
         "Other",
     ),
+    online_form_examples=(
+        "Contacting potential employers for work",
+        "Using resources available at a Workforce Center",
+        "Participating in job clubs or attending employment workshops",
+        "Registering with private employment agencies",
+    ),
+    # Observed on the TWC online log page (Oct 2026: week ended Oct 10, due Oct 28). Shown as an estimate: the
+    # agency's own page is the authority on your due date.
+    due_days=18,
     keep_note="Keep this form for your records. Submit a copy to TWC only if requested.",
     source="TWC list of acceptable work search activities, form BN900E and the TWC glossary. "
     "Verify against your own determination letter and TWC's current pages: rules change.",
     reminders=(
+        "TWC routinely verifies work search activities. Intentional false statements about them are fraud and can "
+        "cost you benefits and lead to criminal prosecution.",
+        "Your online log is not complete until you submit it and reach the confirmation page. You may be held "
+        "ineligible if you do not submit your assigned minimum number of activities for the week requested.",
         "True and complete: intentionally not reporting the true facts on a claim can bring civil and "
         "criminal penalties.",
         "Available for work: ready, willing and able to accept any full-time suitable work, available for "

@@ -23,6 +23,10 @@ _RESULT = {
 }
 
 
+# Outcomes that mean an application was filed. Whether you were hired is never guessed: you answer that.
+_FILED = {"applied", "no_response", "rejected", "recruiter_screen", "interview", "offer"}
+
+
 def _safe(value: str) -> str:
     """Spreadsheet programs run cells that start with = + - @ as formulas; neutralise them."""
     v = str(value).replace("\n", " ").strip()
@@ -66,8 +70,9 @@ def to_entries(rows: list[dict]) -> list[Entry]:
                 category=TX_IN_PERSON if met_employer else TX_APPLY_ONLINE,
                 job_type=row.get("role", ""),
                 employer=row.get("company", ""),
-                contact_method="" if met_employer else "online",
+                contact_method="" if met_employer else "Internet",
                 result=_RESULT.get(outcome, ""),
+                filed_application="yes" if outcome in _FILED else "",
                 notes=[row["notes"].lstrip("'")] if row.get("notes") else [],
             )
         )

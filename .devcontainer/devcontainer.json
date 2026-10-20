@@ -1,0 +1,11 @@
+{
+  "name": "TWC Tracker (demo with sample data)",
+  "image": "mcr.microsoft.com/devcontainers/python:3.12",
+  "postCreateCommand": "pip install -e '.[dev]' && mkdir -p \"$HOME/.twc-tracker\" && cp -n examples/*.csv \"$HOME/.twc-tracker/\"",
+  "postAttachCommand": "nohup twc-tracker ui --no-browser > /tmp/twc-tracker.log 2>&1 &",
+  "forwardPorts": [8765],
+  "portsAttributes": {
+    "8765": { "label": "TWC Tracker", "onAutoForward": "openPreview", "visibility": "private" }
+  },
+  "customizations": { "vscode": { "extensions": ["ms-python.python"] } }
+}

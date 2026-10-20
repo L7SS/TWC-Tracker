@@ -10,6 +10,7 @@ A free, local-first **work-search log** for people collecting unemployment benef
 - Records each work-search activity: date, activity, which accepted category it counts as, employer, contact, result, **hours you actually spent**, and where you keep proof.
 - Shows **totals per claim week** (Sunday to Saturday) and whether you met the number of searches your notice requires.
 - Marks every entry **Ready / Needs N** and says exactly what is missing, so you can fix it before you sign.
+- Gives you **copy-ready text** for TWC's page: the whole week, or one activity, in the portal's field order and wording ([docs/COPY_PASTE.md](docs/COPY_PASTE.md)).
 - Mirrors TWC's online **Add Work Search Activity** page field by field, per claim week, with copy buttons, so you can enter each activity yourself ([docs/TWC_FORM.md](docs/TWC_FORM.md)). It never logs in to or submits to TWC.
 - Keeps a simple **application tracker** and turns it into log entries for you to review.
 - Reads an **.ics calendar file** to suggest interviews and networking events, and writes your log back out as an .ics.
@@ -22,6 +23,12 @@ A free, local-first **work-search log** for people collecting unemployment benef
 - Store or print a Social Security number.
 - Promise that any activity counts, or tell you how many searches you need.
 - Send anything anywhere unless you opt in to the calendar connector. There is no account, no cloud, no telemetry. The web app listens on `127.0.0.1` only, with a per-run token.
+
+## Run it
+
+- **Your computer (recommended, your real claim):** `pipx run --spec "git+https://github.com/L7SS/TWC-Tracker" twc-tracker ui`
+- **Try it with sample data:** [Open in GitHub Codespaces](https://codespaces.new/L7SS/TWC-Tracker). That runs on GitHub's servers, so never enter your real claim there.
+- Details: [docs/RUN_IT.md](docs/RUN_IT.md). Copy-paste workflow for TWC's page: [docs/COPY_PASTE.md](docs/COPY_PASTE.md).
 
 ## Install
 

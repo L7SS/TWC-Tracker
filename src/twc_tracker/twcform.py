@@ -121,3 +121,83 @@ def week_view(entries: list[Entry], day: date, minimum: int | None, cfg: StateCo
         "ready": len(ok),
         "minimum_met": None if minimum is None else len(ok) >= minimum,
     }
+
+
+def fmt_day(iso: str) -> str:
+    """A date as the portal's radio buttons label it, e.g. 'Tuesday, October 06, 2026'."""
+    try:
+        return date.fromisoformat(iso).strftime("%A, %B %d, %Y")
+    except ValueError:
+        return iso
+
+
+def portal_lines(e: Entry) -> list[str]:
+    """One activity as plain text in the portal's order, saying how to enter each field. Blank optionals are omitted."""
+    out: list[str] = []
+
+    def put(label: str, value: str, required: bool = False) -> None:
+        if value:
+            out.append(f"{label}: {value}")
+        elif required:
+            out.append(f"{label}: !! REQUIRED, still blank")
+
+    put("Activity Date (choose this day)", fmt_day(e.date) if e.date else "", True)
+    put("Employer/Agency/Service/Event Name", e.employer, True)
+    put("Type of Work Sought", e.job_type, True)
+    if m := methods(e.contact_method):
+        out.append(f"Contact Method(s) (tick): {', '.join(m)}")
+    put("Person Contacted", e.person_contacted)
+    for label, raw in (("Phone Number", e.phone), ("Fax Number", e.fax)):
+        if parts := split_phone(raw):
+            out.append(f"{label} (three boxes): {parts[0]} | {parts[1]} | {parts[2]}")
+        elif raw:
+            out.append(f"{label}: {raw}   (!! not 10 digits: check it)")
+    put("Ext", e.ext)
+    put("Email Address", e.email)
+    put("Web Site Address", e.website)
+    put("Address", e.address)
+    put("Address (line 2)", e.address2)
+    put("City", e.city)
+    put("State (choose)", e.state.upper())
+    put("ZIP Code", e.zip)
+    put("Did you file an application or resume with this contact? (choose)", e.filed_application.capitalize(), True)
+    put("Were you hired as a result of this activity? (choose)", e.hired.capitalize(), True)
+    if e.hired == "yes":
+        try:
+            d = date.fromisoformat(e.start_date)
+            out.append(f"If Yes, start date: Month {d.strftime('%B')} | Day {d.day} | Year {d.year}")
+        except ValueError:
+            out.append("If Yes, start date: !! REQUIRED, still blank")
+    return out
+
+
+def activity_text(e: Entry) -> str:
+    errs, warns = form_problems(e)
+    head = f"Activity: {e.employer or '(no name yet)'}  [{'READY' if not errs else 'NOT READY'}]"
+    notes = [f"  ! {m}" for m in [*errs, *warns]]
+    return "\n".join([head, *(f"  {line}" for line in portal_lines(e)), *notes])
+
+
+def week_text(entries: list[Entry], day: date, minimum: int | None, cfg: StateConfig) -> str:
+    """A whole claim week as plain text to read from while you fill in the agency's page."""
+    v = week_view(entries, day, minimum, cfg)
+    lines = [
+        f"Claim week: {v['start']} to {v['end']} ({fmt_day(v['start'])} to {fmt_day(v['end'])})",
+    ]
+    if minimum is not None:
+        lines.append(f"Minimum work searches: {minimum}")
+    if v["due"]:
+        lines.append(f"Due (estimated from {cfg.agency}'s page; check the real date there): {fmt_day(v['due'])}")
+    mine = [e for e in entries if v["start"] <= e.date <= v["end"]]
+    for n, e in enumerate(sorted(mine, key=lambda x: x.date), 1):
+        lines += ["", f"--- {n} of {len(mine)} ---", activity_text(e)]
+    lines += [
+        "",
+        f"{v['ready']} of {v['entries']} activities ready for the form"
+        + (f" (minimum {minimum})." if minimum else "."),
+    ]
+    lines.append(
+        "Enter these on the agency's page yourself, review them, and submit. "
+        "Your log is not complete until the agency shows a confirmation page."
+    )
+    return "\n".join(lines)

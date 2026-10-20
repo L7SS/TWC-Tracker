@@ -7,6 +7,7 @@ rebinding), and requires a random per-run token on every request, so other pages
 from __future__ import annotations
 
 import json
+import os
 import secrets
 import webbrowser
 from datetime import date
@@ -20,7 +21,7 @@ from twc_tracker.ics import parse_ics, to_ics
 from twc_tracker.log import Entry, claim_week, load_entries, save_entries, week_bounds, weekly_summary
 from twc_tracker.paths import data_dir, safe_filename, write_private
 from twc_tracker.states import STATES
-from twc_tracker.twcform import CONTACT_METHODS, form_problems, methods, week_view
+from twc_tracker.twcform import CONTACT_METHODS, activity_text, form_problems, methods, week_text, week_view
 
 MAX_BODY = 1_000_000
 _PAGE = Path(__file__).with_name("ui") / "index.html"
@@ -55,16 +56,21 @@ def _state() -> dict:
                 "contact_checked": methods(e.contact_method),
                 "form_errors": form_problems(e)[0],
                 "form_warnings": form_problems(e)[1],
+                "portal_text": activity_text(e),
             }
             for e in entries
         ],
-        "form_weeks": [week_view(entries, d, s["required"], cfg) for d in _form_weeks(entries)],
+        "form_weeks": [
+            {**week_view(entries, d, s["required"], cfg), "text": week_text(entries, d, s["required"], cfg)}
+            for d in _form_weeks(entries)
+        ],
         "contact_methods": list(CONTACT_METHODS),
         "online_form_examples": list(cfg.online_form_examples),
         "weekly": weekly_summary(entries, s["required"]),
         "activities": list(cfg.accepted_activities),
         "results": list(cfg.result_choices),
         "reminders": list(cfg.reminders),
+        "cloud": in_cloud(),
         "agency": cfg.agency,
         "form": cfg.form,
         "source": cfg.source,
@@ -86,15 +92,27 @@ def _entries_from(items: list[dict]) -> list[Entry]:
     return [Entry.from_dict(i) for i in items]
 
 
+def in_cloud() -> bool:
+    """True inside a GitHub Codespace: the app is then running on GitHub's servers, not on your computer."""
+    return bool(os.environ.get("CODESPACE_NAME"))
+
+
+def codespace_hosts(port: int) -> set[str]:
+    name, domain = os.environ.get("CODESPACE_NAME"), os.environ.get("GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN")
+    return {f"{name}-{port}.{domain}"} if name and domain else set()
+
+
 class Handler(BaseHTTPRequestHandler):
     token = ""
     port = 0
+    extra_hosts: frozenset[str] = frozenset()  # exact Host headers also accepted (Codespaces forwarding, --allow-host)
 
     def log_message(self, *args) -> None:  # keep your job search out of the terminal log
         return
 
     def _ok_host(self) -> bool:
-        return (self.headers.get("Host") or "") in {f"127.0.0.1:{self.port}", f"localhost:{self.port}"}
+        host = self.headers.get("Host") or ""
+        return host in {f"127.0.0.1:{self.port}", f"localhost:{self.port}"} or host in self.extra_hosts
 
     def _send(self, code: int, body: bytes, ctype: str = "application/json", extra: dict | None = None) -> None:
         self.send_response(code)
@@ -250,13 +268,16 @@ def _calendar_route(action: str, body: dict, log: Path, provider=None) -> dict:
     raise KeyError(action)
 
 
-def serve(port: int = 8765, open_browser: bool = True) -> None:
+def serve(port: int = 8765, open_browser: bool = True, allow_hosts: tuple[str, ...] = ()) -> None:
     Handler.token = secrets.token_urlsafe(24)
     Handler.port = port
-    srv = ThreadingHTTPServer(("127.0.0.1", port), Handler)
+    Handler.extra_hosts = frozenset({*allow_hosts, *codespace_hosts(port)})
+    srv = ThreadingHTTPServer(("127.0.0.1", port), Handler)  # never bound to other interfaces
     url = f"http://127.0.0.1:{port}/"
     print(f"TWC Tracker running at {url}  (this computer only; Ctrl+C to stop)")
     print(f"Your data is in {data_dir()}")
+    if in_cloud():
+        print("WARNING: this is running on GitHub's servers (Codespaces). Use sample data only, not your real claim.")
     if open_browser:
         webbrowser.open(url)
     try:

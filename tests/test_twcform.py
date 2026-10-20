@@ -57,7 +57,46 @@ def test_cli_form_prints_the_week_and_does_not_claim_submission(tmp_path, monkey
     assert cli.main(["form", "--week", "2026-10-06", "--required", "5"]) == 0
     out = capsys.readouterr().out
     assert "Claim week: 2026-10-04 to 2026-10-10" in out and "Minimum work searches: 5" in out
-    assert "Due (estimated" in out and "2026-10-28" in out
+    assert "Due (estimated" in out and "Wednesday, October 28, 2026" in out
     assert "READY" in out and "NOT READY" in out and "1 of 2 activities ready" in out
     assert "confirmation page" in out
     assert cli.main(["form", "--week", "nope"]) == 2
+
+
+def test_portal_text_follows_the_pages_order_and_wording():
+    from twc_tracker.twcform import activity_text, portal_lines
+
+    e = Entry(date="2026-10-06", employer="Acme", job_type="Analyst", contact_method="internet, in person",
+              phone="(512) 555-0100", ext="12", state="tx", zip="78701", filed_application="yes", hired="yes",
+              start_date="2026-11-02")  # fmt: skip
+    lines = portal_lines(e)
+    assert lines[0] == "Activity Date (choose this day): Tuesday, October 06, 2026"
+    assert "Contact Method(s) (tick): In Person, Internet" in lines
+    assert "Phone Number (three boxes): 512 | 555 | 0100" in lines and "Ext: 12" in lines
+    assert "State (choose): TX" in lines
+    assert "Did you file an application or resume with this contact? (choose): Yes" in lines
+    assert lines[-1] == "If Yes, start date: Month November | Day 2 | Year 2026"
+    assert "READY" in activity_text(e).splitlines()[0]
+
+
+def test_portal_text_flags_missing_required_fields_instead_of_filling_them():
+    from twc_tracker.twcform import portal_lines
+
+    lines = portal_lines(Entry(employer="Acme"))
+    assert "Activity Date (choose this day): !! REQUIRED, still blank" in lines
+    assert any("Did you file" in x and "REQUIRED" in x for x in lines)
+    assert not any(x.startswith(("Fax", "Email", "City")) for x in lines)  # optional blanks are omitted
+
+
+def test_cli_form_json_and_out_file(tmp_path, monkeypatch, capsys):
+    import json
+
+    monkeypatch.setenv("TWC_TRACKER_HOME", str(tmp_path))
+    save_entries(tmp_path / "worksearch_log.csv", [Entry(**OK)])
+    assert cli.main(["form", "--week", "2026-10-06", "--json", "--required", "1"]) == 0
+    d = json.loads(capsys.readouterr().out)
+    assert d["minimum_met"] is True and d["activities"][0]["ready"] is True
+    assert d["activities"][0]["fields"]["Employer/Agency/Service/Event Name"] == "Acme"
+    out = tmp_path / "week.txt"
+    assert cli.main(["form", "--week", "2026-10-06", "--out", str(out)]) == 0
+    assert "Acme" in out.read_text()

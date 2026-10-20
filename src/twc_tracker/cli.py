@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import sys
 from datetime import date
+from pathlib import Path
 
 from twc_tracker import __version__, applications
 from twc_tracker.export import write_csv, write_docx
@@ -22,6 +23,7 @@ def build_parser() -> argparse.ArgumentParser:
     ui = sub.add_parser("ui", help="open the local web app")
     ui.add_argument("--port", type=int, default=8765)
     ui.add_argument("--no-browser", action="store_true")
+    ui.add_argument("--allow-host", action="append", default=[], help="extra exact Host header to accept (proxies)")
 
     add = sub.add_parser("add", help="record one work-search activity (you type every fact)")
     add.add_argument("--date", default=date.today().isoformat(), help="YYYY-MM-DD (default: today)")
@@ -44,6 +46,8 @@ def build_parser() -> argparse.ArgumentParser:
     fm = sub.add_parser("form", help="show one claim week laid out like the agency's online page, to copy across")
     fm.add_argument("--week", default="", help="any date in the claim week, YYYY-MM-DD (default: this week)")
     fm.add_argument("--required", type=int, help="minimum activities for the week, from the agency's page")
+    fm.add_argument("--out", default="", help="write to this file instead of the screen (a .txt to read from)")
+    fm.add_argument("--json", action="store_true", help="machine-readable output")
 
     wk = sub.add_parser("week", help="totals per claim week (Sunday to Saturday)")
     wk.add_argument("--required", type=int, help="activities required per week, from your own agency notice")
@@ -81,7 +85,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.cmd == "ui":
         from twc_tracker.web import serve
 
-        serve(args.port, not args.no_browser)
+        serve(args.port, not args.no_browser, tuple(args.allow_host))
     elif args.cmd == "add":
         e = Entry(
             date=args.date, activity=args.activity, category=args.category, employer=args.employer,
@@ -140,7 +144,9 @@ def main(argv: list[str] | None = None) -> int:
 
 
 def _form(args, cfg, log) -> int:
-    from twc_tracker.twcform import fields, form_problems, week_view
+    import json
+
+    from twc_tracker.twcform import fields, form_problems, week_text, week_view
 
     try:
         day = date.fromisoformat(args.week) if args.week else date.today()
@@ -148,30 +154,23 @@ def _form(args, cfg, log) -> int:
         print("--week must be a date like 2026-10-06", file=sys.stderr)
         return 2
     entries = load_entries(log)
-    v = week_view(entries, day, args.required, cfg)
-    print(f"Claim week: {v['start']} to {v['end']}")
-    if v["minimum"] is not None:
-        print(f"Minimum work searches: {v['minimum']}")
-    if v["due"]:
-        print(f"Due (estimated from {cfg.agency}'s page; check the real date there): {v['due']}")
-    mine = [e for e in entries if v["start"] <= e.date <= v["end"]]
-    for n, e in enumerate(mine, 1):
-        errs, warns = form_problems(e)
-        print(f"\n--- Activity {n}: {'READY' if not errs else 'NOT READY'} ---")
-        for f in fields(e):
-            if f.value or f.required:
-                print(f"{'*' if f.required else ' '} {f.label}: {f.value or '(blank)'}")
-        for m in [*errs, *warns]:
-            print(f"  ! {m}")
-    ready = sum(1 for e in mine if not form_problems(e)[0])
-    print(
-        f"\n{ready} of {len(mine)} activities ready for the form"
-        + (f" (minimum {v['minimum']})" if v["minimum"] else ".")
-    )
-    print(
-        "Enter these on the agency's page yourself, review them, and submit. Your log is not complete until the "
-        "agency shows a confirmation page."
-    )
+    if args.json:
+        v = week_view(entries, day, args.required, cfg)
+        mine = [e for e in entries if v["start"] <= e.date <= v["end"]]
+        acts = []
+        for e in mine:
+            errs, warns = form_problems(e)
+            acts.append({"ready": not errs, "errors": errs, "warnings": warns,
+                         "fields": {f.label: f.value for f in fields(e)}})  # fmt: skip
+        out = {**v, "activities": acts}
+        text = json.dumps(out, indent=2)
+    else:
+        text = week_text(entries, day, args.required, cfg)
+    if args.out:
+        Path(args.out).write_text(text + "\n", encoding="utf-8")
+        print(f"Wrote {args.out}")
+    else:
+        print(text)
     return 0
 
 

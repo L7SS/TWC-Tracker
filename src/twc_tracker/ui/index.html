@@ -24,6 +24,14 @@ label{display:block;font-size:12px;color:var(--mut)}.scroll{overflow-x:auto}.rd{
  entry, and sign it. The agency decides what counts: check your own determination letter.</div>
 <div class="card warn sm" id="cloudwarn" hidden><b>Running on GitHub's servers (Codespaces).</b> Your data is not on your own computer here. Use the sample data only; for your real claim, run it locally (see the README).</div>
 <section id="tab-log" class="on">
+ <div class="card" id="quick"><b>Quick log</b> <span class="mut sm">One line per activity. The date is today unless you change it. Hours are only what you type or your own timer measures.</span>
+  <div class="row"><div><label>What did you do?</label><select id="qkind"></select></div>
+   <div><label>Employer / agency / service / event</label><input id="qemp" size="26"></div>
+   <div><label>Type of work sought</label><input id="qjob" size="20"></div>
+   <div><label>Date</label><input id="qdate" type="date"></div>
+   <div><label>Hours</label><input id="qhrs" size="5" inputmode="decimal"></div>
+   <button class="act sec" id="qtimer" type="button">Start timer</button><span id="qelapsed" class="mut"></span>
+   <button class="act" id="qgo" type="button">Log it</button><span id="qmsg" class="mut" role="status"></span></div></div>
  <div class="card"><b>Weekly totals</b> <span class="mut">(claim weeks run Sunday to Saturday)</span><ul id="weekly"></ul>
   <div class="mut">Hours are only what you type. Nothing is estimated for you.</div></div>
  <div class="card"><div class="row">
@@ -36,7 +44,7 @@ label{display:block;font-size:12px;color:var(--mut)}.scroll{overflow-x:auto}.rd{
 </section>
 <section id="tab-form">
  <div class="card"><div class="row"><div><label>Claim week</label><select id="fweek"></select></div>
-  <button class="act" id="fsave">Save</button><button class="act sec" id="fnew">Add an activity to this week</button><button class="act sec" id="fcopyweek">Copy the whole week as text</button><span id="fmsg" class="mut" role="status"></span></div>
+  <button class="act" id="fsave">Save</button><button class="act sec" id="fnew">Add an activity to this week</button><button class="act sec" id="fcopyweek">Copy the whole week as text</button><button class="act sec" id="fhired">Answer "hired?" as No for unanswered ones</button><span id="fmsg" class="mut" role="status"></span></div>
   <div id="fhead" class="sm" style="margin-top:8px"></div>
   <p class="mut sm">Mirrors the agency's online "Add Work Search Activity" page, field by field. Copy each value into the agency's page yourself, review, and submit there.
   Nothing is sent from here. Your log is not complete until the agency shows a confirmation page. If its page asks for something different, follow the page.</p>
@@ -171,6 +179,7 @@ function renderForm(){
   const fy=ysel(i,'filed_application'),hy=ysel(i,'hired');
   card.append(frow('Did you file an application or resume with this contact?',fy,true,()=>fy.value?fy.value[0].toUpperCase()+fy.value.slice(1):''));
   card.append(frow('Were you hired as a result of this activity?',hy,true,()=>hy.value?hy.value[0].toUpperCase()+hy.value.slice(1):''));
+  card.append(frow('Hours spent (your record; not a field on the page)',tin(i,'hours','text',80)));
   if(e.hired=='yes')card.append(frow('If Yes, what is your start date?',tin(i,'start_date','date',160),true));
   [...errs.map(m=>[m,'bad']),...warns.map(m=>[m,'mut'])].forEach(([m,c])=>card.append(el('div',{className:c+' sm',textContent:'! '+m})));
   const cp=el('button',{className:'act sec',textContent:'Copy this activity as text'});cp.onclick=()=>copyText(e.portal_text||'Save first.','Copied this activity.');card.append(cp,' ');
@@ -178,5 +187,22 @@ function renderForm(){
  $('fcards').oninput=$('fcards').onchange=()=>{DIRTY=true}}
 $('fnew').onclick=()=>{DIRTY=true;S.entries.push(blank({_week:FW,contact_checked:[],form_errors:[],form_warnings:[]}));renderForm()};
 $('fsave').onclick=async()=>{try{await api('/api/entries',{entries:S.entries});await load();say('fmsg','Saved.')}catch(e){say('fmsg',e.message)}};
-load().catch(e=>say('msg',e.message));
+
+const todayLocal=()=>{const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')};
+let QINIT=false;
+function quickInit(){if(QINIT||!S)return;QINIT=true;$('qkind').replaceChildren(...Object.entries(S.kinds).map(([k,l])=>el('option',{value:k,textContent:l})));$('qdate').value=todayLocal();tickTimer()}
+const tget=()=>{try{return +localStorage.getItem('twc_timer')||0}catch{return 0}};
+const tset=v=>{try{v?localStorage.setItem('twc_timer',String(v)):localStorage.removeItem('twc_timer')}catch{}};
+let TT=null;
+function tickTimer(){clearInterval(TT);const t=tget();$('qtimer').textContent=t?'Stop timer':'Start timer';
+ if(!t){$('qelapsed').textContent='';return}
+ const f=()=>{const m=Math.floor((Date.now()-t)/1000);$('qelapsed').textContent=String(Math.floor(m/60)).padStart(2,'0')+':'+String(m%60).padStart(2,'0')+' running'};f();TT=setInterval(f,1000)}
+$('qtimer').onclick=()=>{const t=tget();if(!t){tset(Date.now());tickTimer();return}
+ const h=Math.max(0.01,Math.round((Date.now()-t)/36000)/100);tset(0);$('qhrs').value=String(h);tickTimer();say('qmsg','Timer stopped: '+h+' h. Edit it if you want.')};
+$('qgo').onclick=async()=>{try{await api('/api/entries',{entries:S.entries});
+ await api('/api/quick',{kind:$('qkind').value,employer:$('qemp').value,job_type:$('qjob').value,hours:$('qhrs').value,date:$('qdate').value});
+ const h=$('qhrs').value;$('qemp').value='';$('qjob').value='';$('qhrs').value='';await load();say('qmsg','Logged for '+$('qdate').value+(h?' ('+h+' h)':' (no hours yet)')+'. Find it on the TWC form tab.')}catch(e){say('qmsg',e.message)}};
+$('fhired').onclick=async()=>{if(!confirm('Answer "Were you hired as a result?" as NO for every activity this week that is still unanswered?\n\nOnly do this if it is true.'))return;
+ try{await api('/api/entries',{entries:S.entries});const r=await api('/api/form/hired_no',{week:FW});await load();say('fmsg','Answered "No" on '+r.changed+' activities.')}catch(e){say('fmsg',e.message)}};
+load().then(quickInit).catch(e=>say('msg',e.message));
 </script></body></html>

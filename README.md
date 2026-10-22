@@ -52,6 +52,7 @@ Or from the terminal:
 
 ```bash
 twc-tracker activities         # the activities Texas accepts (copy one into --category)
+twc-tracker log apply "Acme Corp" "Analyst" --hours 1.5   # quick log: one line per activity
 twc-tracker add --activity "Applied for job" \
   --category "Applying for a job online, on any site, to an employer who may reasonably have openings" \
   --employer "Acme Corp" --job-type "Analyst" --result "Application filed" --hours 1.5 --proof "confirmation email"

@@ -12,6 +12,7 @@ from twc_tracker.export import write_csv, write_docx
 from twc_tracker.log import Entry, claim_week, load_entries, save_entries, weekly_summary
 from twc_tracker.paths import data_dir
 from twc_tracker.states import STATES, TEXAS
+from twc_tracker.twcform import form_problems
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -39,6 +40,15 @@ def build_parser() -> argparse.ArgumentParser:
     add.add_argument("--email", default="")
     add.add_argument("--address", default="")
     add.add_argument("--proof", default="", help="where you keep proof: email, screenshot, notes")
+
+    lg = sub.add_parser(
+        "log", help="quick log: kind, who, what type of work, hours (e.g. log apply Acme Analyst --hours 1)"
+    )
+    lg.add_argument("kind", choices=["apply", "interview", "networking", "research"])
+    lg.add_argument("employer", help="employer, agency, service or event name")
+    lg.add_argument("job_type", help="type of work sought (or the service/topic)")
+    lg.add_argument("--hours", default="", help="time you actually spent, e.g. 1.5")
+    lg.add_argument("--date", default="", help="YYYY-MM-DD (default: today)")
 
     sub.add_parser("activities", help="list the activities the state's agency accepts")
     sub.add_parser("check", help="list entries that are not ready to sign, and why")
@@ -95,6 +105,19 @@ def main(argv: list[str] | None = None) -> int:
         save_entries(log, [*load_entries(log), e])
         probs = e.problems(cfg)
         print("Saved. " + ("Ready to sign." if not probs else "Not ready to sign yet: " + "; ".join(probs)))
+    elif args.cmd == "log":
+        from twc_tracker.quick import quick_entry
+
+        try:
+            e = quick_entry(args.kind, args.employer, args.job_type, args.hours, args.date)
+        except ValueError as err:
+            print(f"log: {err}", file=sys.stderr)
+            return 2
+        save_entries(log, [*load_entries(log), e])
+        errs, _ = form_problems(e)
+        print(f"Logged for {e.date}" + (f", {e.hours} h" if e.hours else ", no hours yet") + ".")
+        if errs:
+            print("Still needed before it is ready for the form: " + "; ".join(errs))
     elif args.cmd == "activities":
         print("\n".join(cfg.accepted_activities))
         print(f"\nSource: {cfg.source}")

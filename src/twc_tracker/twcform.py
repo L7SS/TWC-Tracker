@@ -10,7 +10,7 @@ import re
 from dataclasses import dataclass
 from datetime import date, timedelta
 
-from twc_tracker.log import Entry, week_bounds
+from twc_tracker.log import Entry, parse_hours, week_bounds
 from twc_tracker.states import StateConfig
 
 CONTACT_METHODS = ("In Person", "Mail", "Phone", "Fax", "Email", "Internet")
@@ -94,6 +94,7 @@ def fields(e: Entry) -> list[Field]:
         Field("Did you file an application or resume with this contact?", e.filed_application.capitalize(), True),
         Field("Were you hired as a result of this activity?", e.hired.capitalize(), True),
         Field("If yes, what is your start date?", e.start_date),
+        Field("Hours spent (your record: the page has no hours field)", e.hours),
     ]
 
 
@@ -168,7 +169,29 @@ def portal_lines(e: Entry) -> list[str]:
             out.append(f"If Yes, start date: Month {d.strftime('%B')} | Day {d.day} | Year {d.year}")
         except ValueError:
             out.append("If Yes, start date: !! REQUIRED, still blank")
+    if e.hours:
+        out.append(f"Hours spent: {e.hours}   (your own record: the portal page has no hours field)")
     return out
+
+
+def hours_by_day(entries: list[Entry]) -> dict[str, float]:
+    """Hours you entered, per day. Entries without hours are not counted and nothing is estimated."""
+    totals: dict[str, float] = {}
+    for e in entries:
+        if (h := parse_hours(e.hours)) is not None and e.date:
+            totals[e.date] = totals.get(e.date, 0.0) + h
+    return dict(sorted(totals.items()))
+
+
+def mark_hired_no(entries: list[Entry], day: date) -> int:
+    """Answer 'hired?' = no on this claim week's entries where you have not answered. Only call on your say-so."""
+    start, end = week_bounds(day)
+    n = 0
+    for e in entries:
+        if not e.hired and start.isoformat() <= e.date <= end.isoformat():
+            e.hired = "no"
+            n += 1
+    return n
 
 
 def activity_text(e: Entry) -> str:
@@ -191,6 +214,11 @@ def week_text(entries: list[Entry], day: date, minimum: int | None, cfg: StateCo
     mine = [e for e in entries if v["start"] <= e.date <= v["end"]]
     for n, e in enumerate(sorted(mine, key=lambda x: x.date), 1):
         lines += ["", f"--- {n} of {len(mine)} ---", activity_text(e)]
+    per_day = hours_by_day(mine)
+    if per_day:
+        lines += ["", "Hours entered (your record; the portal page has no hours field):"]
+        lines += [f"  {fmt_day(d)}: {h:g}" for d, h in per_day.items()]
+        lines.append(f"  Total this week: {sum(per_day.values()):g}")
     lines += [
         "",
         f"{v['ready']} of {v['entries']} activities ready for the form"

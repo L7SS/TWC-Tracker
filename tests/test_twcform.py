@@ -100,3 +100,51 @@ def test_cli_form_json_and_out_file(tmp_path, monkeypatch, capsys):
     out = tmp_path / "week.txt"
     assert cli.main(["form", "--week", "2026-10-06", "--out", str(out)]) == 0
     assert "Acme" in out.read_text()
+
+
+def test_quick_log_presets_only_what_the_kind_states_and_never_hired_or_hours():
+    import pytest
+
+    from twc_tracker.quick import quick_entry
+
+    e = quick_entry("apply", " Acme ", "Analyst", today=date(2026, 10, 22))
+    assert (e.date, e.employer, e.job_type) == ("2026-10-22", "Acme", "Analyst")
+    assert e.contact_method == "Internet" and e.filed_application == "yes"
+    assert e.hired == "" and e.hours == "" and e.start_date == "" and e.phone == ""
+    assert quick_entry("interview", "X", "Y", "1.5", "2026-10-20").filed_application == ""
+    for bad in ({"kind": "bogus"}, {"hours": "abc"}, {"hours": "0"}, {"day": "10/20"}):
+        with pytest.raises(ValueError):
+            quick_entry(**{"kind": "apply", "employer": "a", "job_type": "b", **bad})
+
+
+def test_hours_flow_into_the_copy_text_with_daily_and_weekly_totals():
+    from twc_tracker.twcform import activity_text, hours_by_day, week_text
+
+    es = [Entry(**OK, hours="1.5"), Entry(**{**OK, "employer": "B"}, hours="0.5"),
+          Entry(**{**OK, "date": "2026-10-07", "employer": "C"}), Entry(**{**OK, "employer": "D"}, hours="abc")]  # fmt: skip
+    assert hours_by_day(es) == {"2026-10-06": 2.0}  # unparseable or missing hours are never counted or guessed
+    assert "Hours spent: 1.5" in activity_text(es[0]) and "Hours spent" not in activity_text(es[2])
+    text = week_text(es, date(2026, 10, 6), 5, TEXAS)
+    assert "Tuesday, October 06, 2026: 2" in text and "Total this week: 2" in text
+    assert "no hours field" in text
+    assert "Hours entered" not in week_text([Entry(**OK)], date(2026, 10, 6), 5, TEXAS)
+
+
+def test_hired_no_only_fills_unanswered_entries_in_that_week():
+    from twc_tracker.twcform import mark_hired_no
+
+    es = [
+        Entry(**{**OK, "hired": ""}),
+        Entry(**{**OK, "hired": "yes"}),
+        Entry(**{**OK, "hired": "", "date": "2026-10-12"}),
+    ]
+    assert mark_hired_no(es, date(2026, 10, 6)) == 1
+    assert [e.hired for e in es] == ["no", "yes", ""]
+
+
+def test_cli_log_is_one_line_and_says_what_is_still_needed(tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv("TWC_TRACKER_HOME", str(tmp_path))
+    assert cli.main(["log", "apply", "Acme", "Analyst", "--hours", "1.5", "--date", "2026-10-06"]) == 0
+    out = capsys.readouterr().out
+    assert "Logged for 2026-10-06, 1.5 h." in out and "were you hired" in out
+    assert cli.main(["log", "apply", "Acme", "Analyst", "--hours", "nope"]) == 2

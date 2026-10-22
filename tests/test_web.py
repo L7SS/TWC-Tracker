@@ -81,3 +81,21 @@ def test_state_carries_copy_ready_text_for_each_activity_and_week(server):
     assert "Employer/Agency/Service/Event Name: Acme" in st["entries"][0]["portal_text"]
     week = next(w for w in st["form_weeks"] if w["start"] == "2026-10-04")
     assert "Claim week: 2026-10-04 to 2026-10-10" in week["text"] and "Acme" in week["text"]
+
+
+def test_quick_log_and_hired_no_routes(server):
+    base, _ = server
+    assert (
+        call(
+            base,
+            "/api/quick",
+            {"kind": "apply", "employer": "Acme", "job_type": "Analyst", "hours": "1", "date": "2026-10-06"},
+        )[0]
+        == 200
+    )
+    assert call(base, "/api/quick", {"kind": "apply", "employer": "A", "hours": "x"})[0] == 400
+    assert call(base, "/api/form/hired_no", {"week": "2026-10-06"})[1] == {"changed": 1}
+    assert call(base, "/api/form/hired_no", {"week": "2026-10-06"})[1] == {"changed": 0}
+    st = call(base, "/api/state")[1]
+    assert st["entries"][0]["hired"] == "no" and st["entries"][0]["form_errors"] == []
+    assert set(st["kinds"]) == {"apply", "interview", "networking", "research"}

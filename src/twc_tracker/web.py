@@ -20,8 +20,17 @@ from twc_tracker.export import write_csv, write_docx
 from twc_tracker.ics import parse_ics, to_ics
 from twc_tracker.log import Entry, claim_week, load_entries, save_entries, week_bounds, weekly_summary
 from twc_tracker.paths import data_dir, safe_filename, write_private
+from twc_tracker.quick import KINDS, quick_entry
 from twc_tracker.states import STATES
-from twc_tracker.twcform import CONTACT_METHODS, activity_text, form_problems, methods, week_text, week_view
+from twc_tracker.twcform import (
+    CONTACT_METHODS,
+    activity_text,
+    form_problems,
+    mark_hired_no,
+    methods,
+    week_text,
+    week_view,
+)
 
 MAX_BODY = 1_000_000
 _PAGE = Path(__file__).with_name("ui") / "index.html"
@@ -71,6 +80,7 @@ def _state() -> dict:
         "results": list(cfg.result_choices),
         "reminders": list(cfg.reminders),
         "cloud": in_cloud(),
+        "kinds": {k: v["label"] for k, v in KINDS.items()},
         "agency": cfg.agency,
         "form": cfg.form,
         "source": cfg.source,
@@ -222,6 +232,16 @@ class Handler(BaseHTTPRequestHandler):
             return {"files": ["work_search_calendar.ics"], "count": len(items)}
         elif path.startswith("/api/calendar/"):
             return self._calendar(path.rsplit("/", 1)[1], body, log)
+        elif path == "/api/quick":
+            e = quick_entry(str(body["kind"]), str(body.get("employer", "")), str(body.get("job_type", "")),
+                            str(body.get("hours", "")), str(body.get("date", "")))  # fmt: skip
+            save_entries(log, [*load_entries(log), e])
+            return {"ok": True, "date": e.date}
+        elif path == "/api/form/hired_no":
+            entries = load_entries(log)
+            n = mark_hired_no(entries, date.fromisoformat(str(body["week"])))
+            save_entries(log, entries)
+            return {"changed": n}
         elif path == "/api/export":
             s = _settings()
             cfg = _cfg(s)

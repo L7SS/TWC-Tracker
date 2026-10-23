@@ -5,8 +5,12 @@ You enter every activity on TWC's own **Add Work Search Activity** page. This to
 ## Easiest way: log as you go (30 seconds each)
 
 1. **Quick log** (top of the first tab): pick what you did, type the employer or site name and the type of work, and add your hours. The date is today unless you change it. The kind you pick fills in what it always means (for example "Applied online" records the Internet contact method and that you filed an application).
-2. **Hours:** type them, or press **Start timer** when you begin and **Stop timer** when you finish. It fills in the hours your own timer measured; edit if needed. Nothing is ever estimated for you.
-3. From a terminal the same thing is one line: `twc-tracker log apply "Acme Corp" "Analyst" --hours 1.5` (kinds: `apply`, `interview`, `networking`, `research`).
+2. **Fill from a job posting (optional):** paste the job link, or the browser tab's title, into the box at the top of Quick log and press **Fill from it**. It suggests the employer and the job title; check them, then log. From a terminal: `twc-tracker log apply --from "<link or tab title>" --hours 1`.
+   - **Most sites:** give it the link and it reads that one page from your computer, using the posting's own data if the employer publishes it, otherwise the page title. If a site refuses or needs a login, it says so and does not try to get around it; paste the title instead.
+   - **LinkedIn:** its terms do not allow automated access, so the tool never fetches it. A LinkedIn link only saves the job number as your proof; copy the line from your browser tab (like `Acme hiring Data Analyst in Austin, TX | LinkedIn`), paste it, and the employer and title are filled in.
+   - The posting link is saved in the entry's proof field, which TWC can ask for.
+3. **Hours:** type them, or press **Start timer** when you begin and **Stop timer** when you finish. It fills in the hours your own timer measured; edit if needed. Nothing is ever estimated for you.
+4. From a terminal the same thing is one line: `twc-tracker log apply "Acme Corp" "Analyst" --hours 1.5` (kinds: `apply`, `interview`, `networking`, `research`).
 
 Hours are for your own record: the portal page in the screenshots has no hours field, so the copied text lists them separately, labeled as such, with a total per day and per week.
 

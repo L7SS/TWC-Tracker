@@ -25,6 +25,10 @@ label{display:block;font-size:12px;color:var(--mut)}.scroll{overflow-x:auto}.rd{
 <div class="card warn sm" id="cloudwarn" hidden><b>Running on GitHub's servers (Codespaces).</b> Your data is not on your own computer here. Use the sample data only; for your real claim, run it locally (see the README).</div>
 <section id="tab-log" class="on">
  <div class="card" id="quick"><b>Quick log</b> <span class="mut sm">One line per activity. The date is today unless you change it. Hours are only what you type or your own timer measures.</span>
+  <div class="row"><div style="flex:1;min-width:280px"><label>Job link or page title (optional: fills in the employer and job title)</label>
+   <input id="qlink" style="width:100%" placeholder="Paste a job link, or the browser tab's title"></div>
+   <button class="act sec" id="qlook" type="button">Fill from it</button></div>
+  <div id="qnotes" class="sm mut"></div>
   <div class="row"><div><label>What did you do?</label><select id="qkind"></select></div>
    <div><label>Employer / agency / service / event</label><input id="qemp" size="26"></div>
    <div><label>Type of work sought</label><input id="qjob" size="20"></div>
@@ -189,7 +193,10 @@ $('fnew').onclick=()=>{DIRTY=true;S.entries.push(blank({_week:FW,contact_checked
 $('fsave').onclick=async()=>{try{await api('/api/entries',{entries:S.entries});await load();say('fmsg','Saved.')}catch(e){say('fmsg',e.message)}};
 
 const todayLocal=()=>{const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')};
-let QINIT=false;
+let QINIT=false,QPROOF='';
+$('qlook').onclick=async()=>{const t=$('qlink').value.trim();if(!t){say('qmsg','Paste a link or a page title first.');return}
+ try{say('qmsg','Looking...');const r=await api('/api/posting',{text:t});if(r.employer)$('qemp').value=r.employer;if(r.job_type)$('qjob').value=r.job_type;
+  if(r.url)QPROOF='Posting: '+r.url;$('qnotes').replaceChildren(...[(r.employer||r.job_type)?'Found: '+(r.employer||'?')+' / '+(r.job_type||'?')+(r.location?' ('+r.location+')':'')+'. Check it, then log it.':'',...r.check].filter(Boolean).map(x=>el('div',{textContent:x})));say('qmsg','')}catch(e){say('qmsg',e.message)}};
 function quickInit(){if(QINIT||!S)return;QINIT=true;$('qkind').replaceChildren(...Object.entries(S.kinds).map(([k,l])=>el('option',{value:k,textContent:l})));$('qdate').value=todayLocal();tickTimer()}
 const tget=()=>{try{return +localStorage.getItem('twc_timer')||0}catch{return 0}};
 const tset=v=>{try{v?localStorage.setItem('twc_timer',String(v)):localStorage.removeItem('twc_timer')}catch{}};
@@ -200,8 +207,8 @@ function tickTimer(){clearInterval(TT);const t=tget();$('qtimer').textContent=t?
 $('qtimer').onclick=()=>{const t=tget();if(!t){tset(Date.now());tickTimer();return}
  const h=Math.max(0.01,Math.round((Date.now()-t)/36000)/100);tset(0);$('qhrs').value=String(h);tickTimer();say('qmsg','Timer stopped: '+h+' h. Edit it if you want.')};
 $('qgo').onclick=async()=>{try{await api('/api/entries',{entries:S.entries});
- await api('/api/quick',{kind:$('qkind').value,employer:$('qemp').value,job_type:$('qjob').value,hours:$('qhrs').value,date:$('qdate').value});
- const h=$('qhrs').value;$('qemp').value='';$('qjob').value='';$('qhrs').value='';await load();say('qmsg','Logged for '+$('qdate').value+(h?' ('+h+' h)':' (no hours yet)')+'. Find it on the TWC form tab.')}catch(e){say('qmsg',e.message)}};
+ await api('/api/quick',{kind:$('qkind').value,employer:$('qemp').value,job_type:$('qjob').value,hours:$('qhrs').value,date:$('qdate').value,proof:QPROOF});
+ const h=$('qhrs').value;$('qemp').value='';$('qlink').value='';QPROOF='';$('qnotes').textContent='';$('qjob').value='';$('qhrs').value='';await load();say('qmsg','Logged for '+$('qdate').value+(h?' ('+h+' h)':' (no hours yet)')+'. Find it on the TWC form tab.')}catch(e){say('qmsg',e.message)}};
 $('fhired').onclick=async()=>{if(!confirm('Answer "Were you hired as a result?" as NO for every activity this week that is still unanswered?\n\nOnly do this if it is true.'))return;
  try{await api('/api/entries',{entries:S.entries});const r=await api('/api/form/hired_no',{week:FW});await load();say('fmsg','Answered "No" on '+r.changed+' activities.')}catch(e){say('fmsg',e.message)}};
 load().then(quickInit).catch(e=>say('msg',e.message));

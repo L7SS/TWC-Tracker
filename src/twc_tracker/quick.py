@@ -37,7 +37,13 @@ KINDS: dict[str, dict[str, str]] = {
 
 
 def quick_entry(
-    kind: str, employer: str, job_type: str, hours: str = "", day: str = "", today: date | None = None
+    kind: str,
+    employer: str,
+    job_type: str,
+    hours: str = "",
+    day: str = "",
+    today: date | None = None,
+    proof: str = "",
 ) -> Entry:
     if kind not in KINDS:
         raise ValueError(f"kind must be one of {sorted(KINDS)}")
@@ -49,4 +55,6 @@ def quick_entry(
     if hours and parse_hours(hours) is None:
         raise ValueError("hours must be a number above 0, like 1.5")
     k = {x: v for x, v in KINDS[kind].items() if x != "label"}
-    return Entry(date=day, employer=employer.strip(), job_type=job_type.strip(), hours=hours.strip(), **k)
+    return Entry(
+        date=day, employer=employer.strip(), job_type=job_type.strip(), hours=hours.strip(), proof=proof.strip(), **k
+    )

@@ -20,6 +20,7 @@ from twc_tracker.export import write_csv, write_docx
 from twc_tracker.ics import parse_ics, to_ics
 from twc_tracker.log import Entry, claim_week, load_entries, save_entries, week_bounds, weekly_summary
 from twc_tracker.paths import data_dir, safe_filename, write_private
+from twc_tracker.posting import PostingError, lookup
 from twc_tracker.quick import KINDS, quick_entry
 from twc_tracker.states import STATES
 from twc_tracker.twcform import (
@@ -233,10 +234,21 @@ class Handler(BaseHTTPRequestHandler):
         elif path.startswith("/api/calendar/"):
             return self._calendar(path.rsplit("/", 1)[1], body, log)
         elif path == "/api/quick":
-            e = quick_entry(str(body["kind"]), str(body.get("employer", "")), str(body.get("job_type", "")),
-                            str(body.get("hours", "")), str(body.get("date", "")))  # fmt: skip
+            e = quick_entry(
+                str(body["kind"]),
+                str(body.get("employer", "")),
+                str(body.get("job_type", "")),
+                str(body.get("hours", "")),
+                str(body.get("date", "")),
+                proof=str(body.get("proof", "")),
+            )
             save_entries(log, [*load_entries(log), e])
             return {"ok": True, "date": e.date}
+        elif path == "/api/posting":
+            try:
+                return lookup(str(body.get("text", ""))).as_dict()
+            except PostingError as e:
+                raise ValueError(str(e)) from e
         elif path == "/api/form/hired_no":
             entries = load_entries(log)
             n = mark_hired_no(entries, date.fromisoformat(str(body["week"])))

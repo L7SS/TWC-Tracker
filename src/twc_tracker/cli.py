@@ -45,8 +45,10 @@ def build_parser() -> argparse.ArgumentParser:
         "log", help="quick log: kind, who, what type of work, hours (e.g. log apply Acme Analyst --hours 1)"
     )
     lg.add_argument("kind", choices=["apply", "interview", "networking", "research"])
-    lg.add_argument("employer", help="employer, agency, service or event name")
-    lg.add_argument("job_type", help="type of work sought (or the service/topic)")
+    lg.add_argument("employer", nargs="?", default="", help="employer, agency, service or event name")
+    lg.add_argument("job_type", nargs="?", default="", help="type of work sought (or the service/topic)")
+    lg.add_argument("--from", dest="source", default="", metavar="LINK_OR_TITLE",
+                    help="fill employer and job title from a job link, or from a pasted page title")  # fmt: skip
     lg.add_argument("--hours", default="", help="time you actually spent, e.g. 1.5")
     lg.add_argument("--date", default="", help="YYYY-MM-DD (default: today)")
 
@@ -106,10 +108,32 @@ def main(argv: list[str] | None = None) -> int:
         probs = e.problems(cfg)
         print("Saved. " + ("Ready to sign." if not probs else "Not ready to sign yet: " + "; ".join(probs)))
     elif args.cmd == "log":
+        from twc_tracker.posting import PostingError, lookup
         from twc_tracker.quick import quick_entry
 
+        employer, job_type, proof = args.employer, args.job_type, ""
+        if args.source:
+            try:
+                found = lookup(args.source)
+            except PostingError as err:
+                print(f"log: {err}", file=sys.stderr)
+                return 2
+            employer, job_type = employer or found.employer, job_type or found.job_type
+            proof = f"Posting: {found.url}" if found.url else ""
+            print(
+                f"Read: {employer or '(no employer)'} / {job_type or '(no title)'}"
+                + (f" ({found.location})" if found.location else "")
+            )
+            for note in found.check:
+                print(f"  check: {note}")
+        if not employer or not job_type:
+            print(
+                "log: employer and job title are both needed (give them, or use --from with a link or page title)",
+                file=sys.stderr,
+            )
+            return 2
         try:
-            e = quick_entry(args.kind, args.employer, args.job_type, args.hours, args.date)
+            e = quick_entry(args.kind, employer, job_type, args.hours, args.date, proof=proof)
         except ValueError as err:
             print(f"log: {err}", file=sys.stderr)
             return 2
